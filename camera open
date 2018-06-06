@@ -1,0 +1,400 @@
+import React from 'react';
+import { Image, StatusBar, StyleSheet, TouchableOpacity, View, CameraRoll, Text } from 'react-native';
+import Camera from 'react-native-camera';
+import OpenCameraStyle from '../styles/OpenCameraStyles';
+import ImagePicker from 'react-native-image-crop-picker';
+import Icon from 'react-native-vector-icons/Ionicons';
+
+
+export default class CameraShow extends React.Component {
+  constructor(props) {
+    super(props);
+
+    this.camera = null;
+
+    this.state = {
+      camera: {
+        aspect: Camera.constants.Aspect.fill,
+        captureTarget: Camera.constants.CaptureTarget.cameraRoll,
+        type: Camera.constants.Type.back,
+        orientation: Camera.constants.Orientation.auto,
+        flashMode: Camera.constants.FlashMode.auto,
+      },
+      photos: [],
+      isRecording: false,
+      userUploads: [],
+      time: {},
+      seconds: 0
+    };
+    this.timer = 0;
+    this.startTimer = this.startTimer.bind(this);
+    this.countDown = this.countDown.bind(this);
+  }
+
+  componentWillMount() {
+    CameraRoll.getPhotos({
+        first: 1,
+        assetType: 'All',
+      })
+      .then(r => {
+        this.setState({ photos: r.edges });
+      })
+      .catch((err) => {
+         //Error Loading Images
+      });
+  }
+  componentDidMount() {
+    const timeLeftVar = this.secondsToTime(this.state.seconds);
+    this.setState({ time: timeLeftVar });
+  }
+  componentWillUnmount() {
+    if (this.props.navigation.state.params.onGoBack) {
+      this.props.navigation.state.params.onGoBack(this.state.userUploads);
+    }
+  }
+  startTimer() {
+    if (this.timer === 0) {
+      this.timer = setInterval(this.countDown, 1000);
+    }
+  }
+  secondsToTime(secs) {
+      const hours = Math.floor(secs / (60 * 60));
+
+      const divisorforminutes = secs % (60 * 60);
+      const minutes = Math.floor(divisorforminutes / 60);
+
+      const divisorforseconds = divisorforminutes % 60;
+      const seconds = Math.ceil(divisorforseconds);
+      const obj = {
+        h: hours,
+        m: minutes,
+        s: seconds
+      };
+      return obj;
+    }
+
+  countDown() {
+    const seconds = this.state.seconds + 1;
+    this.setState({
+      time: this.secondsToTime(seconds),
+      seconds: seconds,
+    });
+    if (seconds === 180) {
+      clearInterval(this.timer);
+       this.stopRecording();
+  }
+}
+  takePicture = () => {
+      const { params } = this.props.navigation.state;
+      const arr = [];
+    if (this.camera) {
+      this.camera
+        .capture()
+        .then(data => {
+          console.log(data);
+         this.setState({
+          userUploads: this.state.userUploads ? this.state.userUploads.concat(data) : arr });
+          if (params.fromScreen === 'homePage') {
+          this.props.navigation.navigate('CreatePost', {
+            userData: params.userData,
+            userUpload: this.state.userUploads,
+            go_back_key: this.props.navigation.state.key
+          });
+        } else {
+          this.props.navigation.setParams({ go_back_key: this.props.navigation.state.key });
+          this.props.navigation.goBack();
+        }
+       })
+        .catch(err => console.error(err));
+    }
+  };
+
+  startRecording = () => {
+    this.startTimer();
+    if (this.camera) {
+      this.camera
+        .capture({ mode: Camera.constants.CaptureMode.video })
+        .then((data) => {
+          this.setState({
+           userUploads: this.state.userUploads ? this.state.userUploads.concat(data) : data });
+        })
+        .catch(err => console.error(err));
+      this.setState({
+        isRecording: true,
+      });
+    }
+  };
+
+  stopRecording = async () => {
+      const { params } = this.props.navigation.state;
+    if (this.camera) {
+      await this.camera.stopCapture();
+      this.setState({
+        isRecording: false,
+      });
+      if (params.fromScreen === 'homePage') {
+      this.props.navigation.navigate('CreatePost', {
+        userData: params.userData,
+        userUpload: this.state.userUploads,
+        go_back_key: this.props.navigation.state.key
+      });
+    } else {
+      this.props.navigation.setParams({ go_back_key: this.props.navigation.state.key });
+     this.props.navigation.goBack();
+    }
+    }
+  };
+
+  switchType = () => {
+    let newType;
+    const { back, front } = Camera.constants.Type;
+
+    if (this.state.camera.type === back) {
+      newType = front;
+    } else if (this.state.camera.type === front) {
+      newType = back;
+    }
+
+    this.setState({
+      camera: {
+        ...this.state.camera,
+        type: newType,
+      },
+    });
+  };
+
+  get typeIcon() {
+    let icon;
+    const { back, front } = Camera.constants.Type;
+
+    if (this.state.camera.type === back) {
+      icon = require('./assets/ic_camera_rear_white.png');
+    } else if (this.state.camera.type === front) {
+      icon = require('./assets/ic_camera_front_white.png');
+    }
+
+    return icon;
+  }
+
+  switchFlash = () => {
+    let newFlashMode;
+    const { auto, on, off } = Camera.constants.FlashMode;
+
+    if (this.state.camera.flashMode === auto) {
+      newFlashMode = on;
+    } else if (this.state.camera.flashMode === on) {
+      newFlashMode = off;
+    } else if (this.state.camera.flashMode === off) {
+      newFlashMode = auto;
+    }
+
+    this.setState({
+      camera: {
+        ...this.state.camera,
+        flashMode: newFlashMode,
+      },
+    });
+  };
+
+  get flashIcon() {
+    let icon;
+    const { auto, on, off } = Camera.constants.FlashMode;
+
+    if (this.state.camera.flashMode === auto) {
+      icon = require('./assets/ic_flash_auto_white.png');
+    } else if (this.state.camera.flashMode === on) {
+      icon = require('./assets/ic_flash_on_white.png');
+    } else if (this.state.camera.flashMode === off) {
+      icon = require('./assets/ic_flash_off_white.png');
+    }
+
+    return icon;
+  }
+  handlePhotos() {
+    if (this.state.photos && this.state.photos.length) {
+      return (
+        <TouchableOpacity onPress={this.openGallery.bind(this)} >
+          <Image
+             style={{
+               width: 80,
+               height: 80,
+               marginRight: 10,
+               borderRadius: 40,
+               borderColor: '#fff',
+               borderWidth: 2
+             }}
+             source={{ uri: this.state.photos[0].node.image.uri }}
+          />
+        </TouchableOpacity>
+      );
+    }
+     }
+
+     openGallery() {
+       const { params } = this.props.navigation.state;
+       ImagePicker.openPicker({
+         multiple: true
+       }).then(uploads => {
+         this.setState({
+           userUploads: this.state.userUploads ? this.state.userUploads.concat(uploads) : uploads,
+           loading: false,
+         });
+         if (params.fromScreen === 'homePage') {
+         this.props.navigation.navigate('CreatePost', {
+           userData: params.userData,
+           userUpload: this.state.userUploads,
+           go_back_key: this.props.navigation.state.key
+         });
+       } else {
+         this.props.navigation.setParams({ go_back_key: this.props.navigation.state.key });
+         this.props.navigation.goBack();
+       }
+       }).catch((error) => {
+         this.setState({ loading: false });
+         console.log(error);
+       });
+     }
+
+     closeCamera() {
+       const { params } = this.props.navigation.state;
+       if (params.fromScreen === 'homePage') {
+       this.props.navigation.navigate('CreatePost', {
+         userData: params.userData,
+         userUpload: this.state.userUploads,
+                         go_back_key: this.props.navigation.state.key
+       });
+     } else {
+       this.props.navigation.setParams({ go_back_key: this.props.navigation.state.key });
+     this.props.navigation.goBack();
+     }
+     }
+
+     render() {
+       return (
+         <View style={styles.container}>
+           <Camera
+             ref={cam => {
+               this.camera = cam;
+             }}
+             style={styles.preview}
+             aspect={this.state.camera.aspect}
+             captureTarget={this.state.camera.captureTarget}
+             captureQuality={'480p'}
+             type={this.state.camera.type}
+             flashMode={this.state.camera.flashMode}
+           />
+           {!this.state.isRecording ?
+           <View
+           style={{ position: 'absolute',
+             padding: 16,
+             right: 0,
+             left: 0,
+             alignItems: 'flex-start',
+             top: 0,
+             flex: 1, }}
+           >
+                <Icon
+                name='ios-close'
+                style={{ fontSize: 40,
+                   color: '#fff' }}
+                onPress={this.closeCamera.bind(this)}
+                />
+                </View> : <View
+                  style={{ position: 'absolute',
+                    padding: 16,
+                    right: 0,
+                    left: 0,
+                    alignItems: 'center',
+                    top: 0,
+                    flex: 1, }}
+                >
+                    <Text style={{ fontSize: 40, color: '#fff' }}>
+                    {this.state.time.m}:{this.state.time.s}
+                    </Text>
+                       </View>
+              }
+            {!this.state.isRecording &&
+           <View style={styles.topOverlay}>
+             <TouchableOpacity style={styles.typeButton} onPress={this.switchType}>
+               <Image source={this.typeIcon} />
+             </TouchableOpacity>
+             <TouchableOpacity style={styles.flashButton} onPress={this.switchFlash}>
+               <Image source={this.flashIcon} />
+             </TouchableOpacity>
+           </View>
+         }
+           <View style={[styles.overlay, styles.bottomOverlay]}>
+           {!this.state.isRecording &&
+           this.handlePhotos()
+            }
+             {(!this.state.isRecording && (
+               <TouchableOpacity style={styles.captureButton} onPress={this.takePicture}>
+                 <Image source={require('./assets/ic_photo_camera_36pt.png')} />
+               </TouchableOpacity>
+             )) ||
+               null}
+             <View style={styles.buttonsSpace} />
+             {(!this.state.isRecording && (
+               <TouchableOpacity style={styles.captureButton} onPress={this.startRecording}>
+                 <Image source={require('./assets/ic_videocam_36pt.png')} />
+               </TouchableOpacity>
+             )) || (
+               <TouchableOpacity style={styles.captureButton} onPress={this.stopRecording}>
+                 <Image source={require('./assets/ic_stop_36pt.png')} />
+               </TouchableOpacity>
+             )}
+           </View>
+         </View>
+       );
+     }
+   }
+
+   const styles = StyleSheet.create({
+     container: {
+       flex: 1,
+     },
+     preview: {
+       flex: 1,
+       justifyContent: 'flex-end',
+       alignItems: 'center'
+     },
+     overlay: {
+       position: 'absolute',
+       padding: 16,
+       right: 0,
+       left: 0,
+       alignItems: 'center',
+     },
+     topOverlay: {
+       position: 'absolute',
+       padding: 16,
+       right: 0,
+       left: 0,
+       alignItems: 'flex-end',
+       top: 0,
+       flex: 1,
+       flexDirection: 'column',
+       justifyContent: 'space-between'
+     },
+     bottomOverlay: {
+       bottom: 0,
+       backgroundColor: 'rgba(0,0,0,0.4)',
+       flexDirection: 'row',
+       justifyContent: 'center',
+       alignItems: 'center',
+     },
+     captureButton: {
+       padding: 15,
+       backgroundColor: 'white',
+       borderRadius: 40,
+     },
+     typeButton: {
+       padding: 5,
+     },
+     flashButton: {
+       padding: 5,
+     },
+     buttonsSpace: {
+       width: 10,
+     },
+   });
